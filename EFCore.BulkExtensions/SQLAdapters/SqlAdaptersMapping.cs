@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using EFCore.BulkExtensions.SQLAdapters.Oracle;
 using EFCore.BulkExtensions.SQLAdapters.SQLite;
 using EFCore.BulkExtensions.SQLAdapters.SQLServer;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +14,7 @@ namespace EFCore.BulkExtensions.SqlAdapters
         Sqlite,
         //PostgreSql, // ProviderName can be added as  optional Attribute of Enum so it can be defined when not the same, like Npgsql for PostgreSql
         //MySql,
+        Oracle,
     }
 
     public static class SqlAdaptersMapping
@@ -21,7 +23,8 @@ namespace EFCore.BulkExtensions.SqlAdapters
             new Dictionary<DbServer, ISqlOperationsAdapter>
             {
                 {DbServer.Sqlite, new SqLiteOperationsAdapter()},
-                {DbServer.SqlServer, new SqlOperationsServerAdapter()}
+                {DbServer.SqlServer, new SqlOperationsServerAdapter()},
+                {DbServer.Oracle,new OracleOperationsAdapter()}
             };
 
         public static readonly Dictionary<DbServer, IQueryBuilderSpecialization> SqlQueryBuilderSpecializationMapping =
@@ -42,7 +45,7 @@ namespace EFCore.BulkExtensions.SqlAdapters
             var providerType = GetDatabaseType(context);
             return GetAdapterDialect(providerType);
         }
-        
+
         public static IQueryBuilderSpecialization GetAdapterDialect(DbServer providerType)
         {
             return SqlQueryBuilderSpecializationMapping[providerType];
@@ -50,7 +53,15 @@ namespace EFCore.BulkExtensions.SqlAdapters
 
         public static DbServer GetDatabaseType(DbContext context)
         {
-            return context.Database.ProviderName.EndsWith(DbServer.Sqlite.ToString()) ? DbServer.Sqlite : DbServer.SqlServer;
+            if (context.Database.ProviderName.EndsWith(DbServer.Sqlite.ToString()))
+            {
+                return DbServer.Sqlite;
+            }
+            else if (context.Database.ProviderName.Contains(DbServer.Oracle.ToString()))
+            {
+                return DbServer.Oracle;
+            }
+            return DbServer.SqlServer;
         }
     }
 }
