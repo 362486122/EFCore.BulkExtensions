@@ -19,7 +19,13 @@ namespace EFCore.BulkExtensions.SQLAdapters.Oracle
         {
             var connection = OpenAndGetSqlConnection(context, tableInfo.BulkConfig);
             bool doExplicitCommit = false;
-
+            bool doPreInsert = entities.Count()>tableInfo.BulkConfig.BatchSize;
+            IList<T> preInsertEntities = null;
+            if (doPreInsert)
+            {
+                preInsertEntities = entities.Take(tableInfo.BulkConfig.BatchSize).ToList();
+                entities = entities.Skip(tableInfo.BulkConfig.BatchSize).ToList();
+            }
             try
             {
                 if (context.Database.CurrentTransaction == null)
@@ -30,7 +36,12 @@ namespace EFCore.BulkExtensions.SQLAdapters.Oracle
                     connection.BeginTransaction() :
                     context.Database.CurrentTransaction.GetUnderlyingTransaction(tableInfo.BulkConfig);
 
-                var command = GetOracleCommand(context, type, entities, tableInfo, (OracleConnection)connection, (OracleTransaction)transaction); 
+                var command = GetOracleCommand(context, type, entities, tableInfo, (OracleConnection)connection, (OracleTransaction)transaction);
+                if(doPreInsert)
+                {
+                    LoadOracleValues(tableInfo, preInsertEntities, command);
+                    command.ExecuteNonQuery();
+                }
                 LoadOracleValues(tableInfo, entities, command);
                 command.ExecuteNonQuery();
                 if (doExplicitCommit)
@@ -48,7 +59,14 @@ namespace EFCore.BulkExtensions.SQLAdapters.Oracle
         public async Task InsertAsync<T>(DbContext context, Type type, IList<T> entities, TableInfo tableInfo, Action<decimal> progress, CancellationToken cancellationToken)
         {
             var connection =await OpenAndGetSqlConnectionAsync(context, tableInfo.BulkConfig,cancellationToken);
-            bool doExplicitCommit = false; 
+            bool doExplicitCommit = false;
+            bool doPreInsert = entities.Count() > tableInfo.BulkConfig.BatchSize;
+            IList<T> preInsertEntities = null;
+            if (doPreInsert)
+            {
+                preInsertEntities = entities.Take(tableInfo.BulkConfig.BatchSize).ToList();
+                entities = entities.Skip(tableInfo.BulkConfig.BatchSize).ToList();
+            }
             try
             {
                 if (context.Database.CurrentTransaction == null)
@@ -60,6 +78,11 @@ namespace EFCore.BulkExtensions.SQLAdapters.Oracle
                     context.Database.CurrentTransaction.GetUnderlyingTransaction(tableInfo.BulkConfig);
 
                 var command = GetOracleCommand(context, type, entities, tableInfo, (OracleConnection)connection, (OracleTransaction)transaction);
+                if (doPreInsert)
+                {
+                    LoadOracleValues(tableInfo, preInsertEntities, command);
+                    await command.ExecuteNonQueryAsync();
+                }
                 LoadOracleValues(tableInfo, entities, command);
                 await command.ExecuteNonQueryAsync();
                 if (doExplicitCommit)
@@ -147,6 +170,7 @@ namespace EFCore.BulkExtensions.SQLAdapters.Oracle
         #region OracleData
         internal static OracleCommand GetOracleCommand<T>(DbContext context, Type type, IList<T> entities, TableInfo tableInfo, OracleConnection connection, OracleTransaction transaction)
         {
+            
             OracleCommand command = connection.CreateCommand();
             command.Transaction = transaction;
 
@@ -210,6 +234,8 @@ namespace EFCore.BulkExtensions.SQLAdapters.Oracle
             }
             command.ArrayBindCount = entities.Count();
             command.BindByName = true;
+            
+            //command.CommandTimeout = 30;
         }
         #endregion
     }
