@@ -235,7 +235,7 @@ namespace EFCore.BulkExtensions.SQLAdapters.Oracle
             command.ArrayBindCount = entities.Count();
             command.BindByName = true;
             
-            //command.CommandTimeout = 30;
+            command.CommandTimeout = tableInfo.BulkConfig.BulkCopyTimeout??300;
         }
         #endregion
     }
