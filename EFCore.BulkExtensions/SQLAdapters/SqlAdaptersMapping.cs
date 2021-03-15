@@ -31,7 +31,8 @@ namespace EFCore.BulkExtensions.SqlAdapters
             new Dictionary<DbServer, IQueryBuilderSpecialization>
             {
                 {DbServer.Sqlite, new SqLiteDialect()},
-                {DbServer.SqlServer, new SqlServerDialect()}
+                {DbServer.SqlServer, new SqlServerDialect()},
+                {DbServer.Oracle,new OracleDialect() }
             };
 
         public static ISqlOperationsAdapter CreateBulkOperationsAdapter(DbContext context)

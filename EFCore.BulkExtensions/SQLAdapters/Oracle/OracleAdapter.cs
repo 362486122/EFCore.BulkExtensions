@@ -186,9 +186,11 @@ namespace EFCore.BulkExtensions.SQLAdapters.Oracle
                 case OperationType.InsertOrUpdateDelete:
                     throw new NotSupportedException("Oracle not support insert or update delete");
                 case OperationType.Update:
-                    throw new NotSupportedException("Oracle not support  batch update.");
+                    command.CommandText = SqlQueryBuilderOracle.UpdateSetTable(tableInfo);
+                    break;
                 case OperationType.Delete:
-                    throw new NotSupportedException("Oracle not support  delete");
+                    command.CommandText = SqlQueryBuilderOracle.DeleteFromTable(tableInfo);
+                    break;
             }
             type = tableInfo.HasAbstractList ? entities[0].GetType() : type;
             var entityType = context.Model.FindEntityType(type);
