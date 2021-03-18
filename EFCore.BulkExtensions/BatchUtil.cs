@@ -43,6 +43,9 @@ namespace EFCore.BulkExtensions
         // UPDATE [a] SET [UpdateColumns] = N'updateValues'
         // FROM [Table] AS [a]
         // WHERE [a].[Columns] = FilterValues
+        //-- Oracle
+        // UPDATE "Table" "a" SET [UpdateColumns] = N'updateValues'
+        // WHERE [a].[Columns] = FilterValues
         public static (string, List<object>) GetSqlUpdate(IQueryable query, DbContext context, object updateValues, List<string> updateColumns)
         {
             var (sql, tableAlias, tableAliasSufixAs, topStatement, leadingComments, innerParameters) = GetBatchSql(query, context, isUpdate: true);
@@ -50,6 +53,10 @@ namespace EFCore.BulkExtensions
 
             string sqlSET = GetSqlSetSegment(context, updateValues.GetType(), updateValues, updateColumns, sqlParameters);
 
+            if (SqlAdaptersMapping.GetDatabaseType(context) == DbServer.Oracle)
+            {
+                sqlSET = sqlSET.Replace("[", "\"").Replace("]", "\"").Replace("@", ":");
+            }
             sqlParameters = ReloadSqlParameters(context, sqlParameters); // Sqlite requires SqliteParameters
 
             var resultQuery = $"{leadingComments}UPDATE {topStatement}{tableAlias}{tableAliasSufixAs} {sqlSET}{sql}";
@@ -76,22 +83,29 @@ namespace EFCore.BulkExtensions
         {
             (string sql, string tableAlias, string tableAliasSufixAs, string topStatement, string leadingComments, IEnumerable<object> innerParameters) = GetBatchSql(query, context, isUpdate: true);
 
+            // StringBuilder sqlColumns = new StringBuilder();
+            List<object> sqlParameters = new List<object>();
+
             var createUpdateBodyData = new BatchUpdateCreateBodyData(sql, context, innerParameters, query, type, tableAlias, expression);
 
             CreateUpdateBody(createUpdateBodyData, expression.Body);
+            sqlParameters.AddRange(ReloadSqlParameters(context, createUpdateBodyData.SqlParameters)); // Sqlite requires   SqliteParameters 
+            var sqlColumn = (createUpdateBodyData.DatabaseType == DbServer.SqlServer)
+         ? createUpdateBodyData.UpdateColumnsSql
+         : createUpdateBodyData.UpdateColumnsSql.Replace($"[{tableAlias}].", "");
+            if (createUpdateBodyData.DatabaseType == DbServer.Oracle)
+            {
+                sqlColumn = sqlColumn.Replace("[", "\"").Replace("]", "\"").Replace("@", ":");
+            }
 
-            var sqlParameters = ReloadSqlParameters(context, createUpdateBodyData.SqlParameters); // Sqlite requires SqliteParameters
-            var sqlColumns = (createUpdateBodyData.DatabaseType == DbServer.SqlServer) 
-                ? createUpdateBodyData.UpdateColumnsSql
-                : createUpdateBodyData.UpdateColumnsSql.Replace($"[{tableAlias}].", "");
 
-            var resultQuery = $"{leadingComments}UPDATE {topStatement}{tableAlias}{tableAliasSufixAs} SET {sqlColumns} {sql}";
+            var resultQuery = $"{leadingComments}UPDATE {topStatement}{tableAlias}{tableAliasSufixAs} SET {sqlColumn} {sql}";
             return (resultQuery, sqlParameters);
         }
 
         public static List<object> ReloadSqlParameters(DbContext context, List<object> sqlParameters)
         {
-            return SqlAdaptersMapping.GetAdapterDialect(context).ReloadSqlParameters(context,sqlParameters);
+            return SqlAdaptersMapping.GetAdapterDialect(context).ReloadSqlParameters(context, sqlParameters);
         }
 
         public static (string, string, string, string, string, IEnumerable<object>) GetBatchSql(IQueryable query, DbContext context, bool isUpdate)
@@ -226,7 +240,7 @@ namespace EFCore.BulkExtensions
                 return;
             }
 
-            if (expression is MemberExpression memberExpression 
+            if (expression is MemberExpression memberExpression
                 && memberExpression.Expression is ParameterExpression parameterExpression
                 && parameterExpression.Name == createBodyData.RootInstanceParameterName)
             {
@@ -323,7 +337,7 @@ namespace EFCore.BulkExtensions
                         CreateUpdateBody(createBodyData, binaryExpression.Right);
                         break;
 
-                    default: 
+                    default:
                         throw new NotSupportedException($"{nameof(BatchUtil)}.{nameof(CreateUpdateBody)}(..) is not supported for a binary exression of type {binaryExpression.NodeType}");
                 }
 
@@ -354,13 +368,13 @@ namespace EFCore.BulkExtensions
 #pragma warning restore EF1001 // Internal EF Core API usage.
         }
 
-      
+
 
         public static (string, string) SplitLeadingCommentsAndMainSqlQuery(string sqlQuery)
         {
             var leadingCommentsBuilder = new StringBuilder();
             var mainSqlQuery = sqlQuery;
-            while (!string.IsNullOrWhiteSpace(mainSqlQuery) 
+            while (!string.IsNullOrWhiteSpace(mainSqlQuery)
                 && !mainSqlQuery.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase))
             {
                 if (mainSqlQuery.StartsWith("--"))
@@ -705,7 +719,7 @@ namespace EFCore.BulkExtensions
             if (isFirstNavigationACollectionType)
             {
                 innerSql = innerSql.Substring(6).Trim();
-                
+
                 if (innerSql.StartsWith("("))
                 {
                     createBodyData.UpdateColumnsSql.Append(' ').Append(innerSql);
@@ -783,7 +797,7 @@ namespace EFCore.BulkExtensions
 
         public class ExpressionNode
         {
-            public ExpressionNode (Expression expression, ExpressionNode parent)
+            public ExpressionNode(Expression expression, ExpressionNode parent)
             {
                 Expression = expression;
                 Parent = parent;

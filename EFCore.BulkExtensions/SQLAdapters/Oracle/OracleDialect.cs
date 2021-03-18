@@ -1,10 +1,12 @@
 ﻿using EFCore.BulkExtensions.SqlAdapters;
 using Microsoft.EntityFrameworkCore;
+using Oracle.ManagedDataAccess.Client;
 using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq.Expressions;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace EFCore.BulkExtensions.SQLAdapters.Oracle
 {
@@ -21,7 +23,8 @@ namespace EFCore.BulkExtensions.SQLAdapters.Oracle
             foreach (var parameter in sqlParameters)
             {
                 var sqlParameter = (IDbDataParameter)parameter;
-                sqlParametersReloaded.Add(SqlClientHelper.CorrectParameterType(c, sqlParameter));
+                //默认参数里面可能包含@
+                sqlParametersReloaded.Add(new OracleParameter($":{sqlParameter.ParameterName.Replace("@","")}", sqlParameter.Value));
             }
             return sqlParametersReloaded;
         }
@@ -39,12 +42,12 @@ namespace EFCore.BulkExtensions.SQLAdapters.Oracle
         public ExtractedTableAlias GetBatchSqlExtractTableAliasFromQuery(string fullQuery, string tableAlias,
             string tableAliasSuffixAs)
         {
-            return new ExtractedTableAlias
-            {
-                TableAlias = tableAlias,
-                TableAliasSuffixAs = tableAliasSuffixAs,
-                Sql = fullQuery
-            };
+            var result = new ExtractedTableAlias();
+            var match = Regex.Match(fullQuery, @"FROM (""[^""]+"")( ""[^""]+"")");
+            result.TableAlias = match.Groups[1].Value;
+            result.TableAliasSuffixAs = match.Groups[2].Value;
+            result.Sql = fullQuery.Substring(match.Index + match.Length);
+            return result;
         }
     }
 }

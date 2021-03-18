@@ -42,7 +42,7 @@ namespace EFCore.BulkExtensions
 
         public static async Task<int> BatchDeleteAsync(this IQueryable query, CancellationToken cancellationToken = default)
         {
-            var context = BatchUtil.GetDbContext(query);
+            var context = BatchUtil.GetDbContext(query); 
             var (sql, sqlParameters) = BatchUtil.GetSqlDelete(query, context);
             return await context.Database.ExecuteSqlRawAsync(sql, sqlParameters, cancellationToken).ConfigureAwait(false);
         }
@@ -64,17 +64,17 @@ namespace EFCore.BulkExtensions
         public static async Task<int> BatchUpdateAsync(this IQueryable query, Type type, Expression<Func<object, object>> updateExpression, CancellationToken cancellationToken = default)
         {
             var context = BatchUtil.GetDbContext(query);
-            var (sql, sqlParameters) = BatchUtil.GetSqlUpdate(query, context, type, updateExpression);
+            var (sql, sqlParameters) = BatchUtil.GetSqlUpdate(query, context, type, updateExpression); 
             return await context.Database.ExecuteSqlRawAsync(sql, sqlParameters, cancellationToken).ConfigureAwait(false);
         }
 
-        public static void BulkInsert<T>(this IQueryable query, IList<T> entities, BulkConfig bulkConfig = null) where T : class
+        public static void BatchInsert<T>(this IQueryable query, IList<T> entities, BulkConfig bulkConfig = null) where T : class
         {
             var context = BatchUtil.GetDbContext(query);
             DbContextBulkTransaction.Execute(context, entities, OperationType.Insert, bulkConfig, null);
         }
 
-        public static Task BulkInsertAsync<T>(this IQueryable query, IList<T> entities, BulkConfig bulkConfig = null, CancellationToken cancellationToken = default) where T : class
+        public static Task BatchInsertAsync<T>(this IQueryable query, IList<T> entities, BulkConfig bulkConfig = null, CancellationToken cancellationToken = default) where T : class
         {
             var context = BatchUtil.GetDbContext(query);
             return DbContextBulkTransaction.ExecuteAsync(context, entities, OperationType.Insert, bulkConfig, null, cancellationToken);

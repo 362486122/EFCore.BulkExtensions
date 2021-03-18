@@ -27,7 +27,7 @@ namespace EFCore.BulkExtensions.SQLAdapters.Oracle
                 entities = entities.Skip(tableInfo.BulkConfig.BatchSize).ToList();
             }
             try
-            {
+            { 
                 if (context.Database.CurrentTransaction == null)
                 {  
                     doExplicitCommit = true;
@@ -192,19 +192,27 @@ namespace EFCore.BulkExtensions.SQLAdapters.Oracle
                     command.CommandText = SqlQueryBuilderOracle.DeleteFromTable(tableInfo);
                     break;
             }
-            type = tableInfo.HasAbstractList ? entities[0].GetType() : type;
+            type = tableInfo.HasAbstractList ? entities[0].GetType() : type; 
             var entityType = context.Model.FindEntityType(type);
             var entityPropertiesDict = entityType.GetProperties().Where(a => tableInfo.PropertyColumnNamesDict.ContainsKey(a.Name)).ToDictionary(a => a.Name, a => a);
-            var properties = type.GetProperties();
-
+            var properties = type.GetProperties(); 
             foreach (var property in properties)
             {
                 if (entityPropertiesDict.ContainsKey(property.Name))
                 {
                     var propertyEntityType = entityPropertiesDict[property.Name];
                     string columnName = propertyEntityType.GetColumnName();
-                    var propertyType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
-                    var parameter = new OracleParameter($":{columnName}", string.Empty);
+                    bool isNullable = true;
+                    var propertyType = Nullable.GetUnderlyingType(property.PropertyType); 
+                    if(propertyType==null)
+                    {
+                        propertyType= property.PropertyType;
+                        isNullable = false;
+                    } 
+                    //TODO 不是值类型是否只有string?
+                    object val=propertyType.IsValueType? Activator.CreateInstance(propertyType): string.Empty; 
+                    var parameter = new OracleParameter($":{columnName}", val);
+                    parameter.IsNullable = isNullable;
                     command.Parameters.Add(parameter);
                 }
             }
@@ -232,6 +240,7 @@ namespace EFCore.BulkExtensions.SQLAdapters.Oracle
                         values.Add(entity.GetType().Name);
                     }
                 }
+                //command.Parameters.Add($":{propertyColumn.Value}",values.ToArray());
                 command.Parameters[$":{propertyColumn.Value}"].Value = values.ToArray();
             }
             command.ArrayBindCount = entities.Count();
