@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using EFCore.BulkExtensions.SQLAdapters.Oracle;
+using EFCore.BulkExtensions.SQLAdapters.Postgresql;
 using EFCore.BulkExtensions.SQLAdapters.SQLite;
 using EFCore.BulkExtensions.SQLAdapters.SQLServer;
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +16,7 @@ namespace EFCore.BulkExtensions.SqlAdapters
         //PostgreSql, // ProviderName can be added as  optional Attribute of Enum so it can be defined when not the same, like Npgsql for PostgreSql
         //MySql,
         Oracle,
+        PostgreSQL
     }
 
     public static class SqlAdaptersMapping
@@ -24,7 +26,8 @@ namespace EFCore.BulkExtensions.SqlAdapters
             {
                 {DbServer.Sqlite, new SqLiteOperationsAdapter()},
                 {DbServer.SqlServer, new SqlOperationsServerAdapter()},
-                {DbServer.Oracle,new OracleOperationsAdapter()}
+                {DbServer.Oracle,new OracleOperationsAdapter()},
+                {DbServer.PostgreSQL,new PostgresqlAdapter() }
             };
 
         public static readonly Dictionary<DbServer, IQueryBuilderSpecialization> SqlQueryBuilderSpecializationMapping =
@@ -32,7 +35,8 @@ namespace EFCore.BulkExtensions.SqlAdapters
             {
                 {DbServer.Sqlite, new SqLiteDialect()},
                 {DbServer.SqlServer, new SqlServerDialect()},
-                {DbServer.Oracle,new OracleDialect() }
+                {DbServer.Oracle,new OracleDialect() },
+                {DbServer.PostgreSQL,new PostgresqlDialect() }
             };
 
         public static ISqlOperationsAdapter CreateBulkOperationsAdapter(DbContext context)
@@ -61,6 +65,10 @@ namespace EFCore.BulkExtensions.SqlAdapters
             else if (context.Database.ProviderName.Contains(DbServer.Oracle.ToString()))
             {
                 return DbServer.Oracle;
+            }
+            else if(context.Database.ProviderName.Contains(DbServer.PostgreSQL.ToString()))
+            {
+                return DbServer.PostgreSQL;
             }
             return DbServer.SqlServer;
         }

@@ -57,6 +57,10 @@ namespace EFCore.BulkExtensions
             {
                 sqlSET = sqlSET.Replace("[", "\"").Replace("]", "\"").Replace("@", ":");
             }
+            if(SqlAdaptersMapping.GetDatabaseType(context)==DbServer.PostgreSQL)
+            {
+                sqlSET = sqlSET.Replace("[", "\"").Replace("]", "\"");
+            }
             sqlParameters = ReloadSqlParameters(context, sqlParameters); // Sqlite requires SqliteParameters
 
             var resultQuery = $"{leadingComments}UPDATE {topStatement}{tableAlias}{tableAliasSufixAs} {sqlSET}{sql}";
@@ -90,17 +94,32 @@ namespace EFCore.BulkExtensions
 
             CreateUpdateBody(createUpdateBodyData, expression.Body);
             sqlParameters.AddRange(ReloadSqlParameters(context, createUpdateBodyData.SqlParameters)); // Sqlite requires   SqliteParameters 
-            var sqlColumn = (createUpdateBodyData.DatabaseType == DbServer.SqlServer)
-         ? createUpdateBodyData.UpdateColumnsSql
-         : createUpdateBodyData.UpdateColumnsSql.Replace($"[{tableAlias}].", "");
-            if (createUpdateBodyData.DatabaseType == DbServer.Oracle)
-            {
-                sqlColumn = sqlColumn.Replace("[", "\"").Replace("]", "\"").Replace("@", ":");
-            }
-
+            var sqlColumn = ConvertSqlColumns(tableAlias,createUpdateBodyData.UpdateColumnsSql, createUpdateBodyData.DatabaseType); 
 
             var resultQuery = $"{leadingComments}UPDATE {topStatement}{tableAlias}{tableAliasSufixAs} SET {sqlColumn} {sql}";
             return (resultQuery, sqlParameters);
+        }
+
+        private static StringBuilder ConvertSqlColumns(string tableAlias,StringBuilder sqlColumn,DbServer dbServer)
+        {
+             if(dbServer==DbServer.SqlServer)
+            {
+                return sqlColumn;
+            }
+            sqlColumn=sqlColumn.Replace($"[{tableAlias}].", "");
+            if (dbServer==DbServer.Sqlite)
+            {
+                return sqlColumn;
+            }
+            if(dbServer==DbServer.Oracle)
+            {
+                return sqlColumn.Replace("[", "\"").Replace("]", "\"").Replace("@", ":");
+            }
+            if(dbServer == DbServer.PostgreSQL)
+            {
+                return sqlColumn.Replace("[", "\"").Replace("]", "\"");
+            }
+            return sqlColumn;
         }
 
         public static List<object> ReloadSqlParameters(DbContext context, List<object> sqlParameters)
