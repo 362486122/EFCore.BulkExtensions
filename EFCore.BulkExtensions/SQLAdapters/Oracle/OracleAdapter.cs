@@ -101,9 +101,33 @@ namespace EFCore.BulkExtensions.SQLAdapters.Oracle
             throw new NotImplementedException();
         }
 
-        public Task MergeAsync<T>(DbContext context, Type type, IList<T> entities, TableInfo tableInfo, OperationType operationType, Action<decimal> progress, CancellationToken cancellationToken) where T : class
+        public async Task MergeAsync<T>(DbContext context, Type type, IList<T> entities, TableInfo tableInfo, OperationType operationType, Action<decimal> progress, CancellationToken cancellationToken) where T : class
         {
-            throw new NotImplementedException();
+            var connection = await OpenAndGetSqlConnectionAsync(context, tableInfo.BulkConfig, cancellationToken).ConfigureAwait(false);
+            bool doExplicitCommit = false;
+            try
+            {
+                if (context.Database.CurrentTransaction == null)
+                {
+                    doExplicitCommit = true;
+                }
+                var transaction = context.Database.CurrentTransaction == null ?
+                    connection.BeginTransaction() :
+                    context.Database.CurrentTransaction.GetUnderlyingTransaction(tableInfo.BulkConfig);
+
+                var command = GetOracleCommand(context, type, entities, tableInfo, (OracleConnection)connection, (OracleTransaction)transaction); 
+                LoadOracleValues(tableInfo, entities, command);
+                await command.ExecuteNonQueryAsync();
+                if (doExplicitCommit)
+                {
+                    transaction.Commit();
+                }
+            }
+            finally
+            {
+                await context.Database.CloseConnectionAsync();
+            }
+
         }
 
         public void Read<T>(DbContext context, Type type, IList<T> entities, TableInfo tableInfo, Action<decimal> progress) where T : class

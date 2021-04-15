@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -89,6 +90,15 @@ namespace EFCore.BulkExtensions
         public static void BulkUpdate(this DbContext context, Type entityType, IList<object> entities, BulkConfig bulkConfig = null, Action<decimal> progress = null)
         {
             DbContextBulkTransaction.Execute(context, entityType, entities, OperationType.Update, bulkConfig, progress);
+        }
+
+        public static void BulkUpdate<TSource>(this DbContext context, IList<TSource> entities, List<string> updateProp, List<string> keyProp, Action<BulkConfig> bulkAction = null) where TSource : class
+        { 
+            BulkConfig bulkConfig = new BulkConfig();
+            bulkConfig.UpdateByProperties = keyProp;
+            bulkConfig.PropertiesToInclude = updateProp;
+            bulkAction?.Invoke(bulkConfig);
+            DbContextBulkTransaction.Execute(context, entities, OperationType.Update, bulkConfig, null);
         }
 
         public static void BulkUpdate<T>(this DbContext context, IList<T> entities, Action<BulkConfig> bulkAction, Action<decimal> progress = null) where T : class
@@ -241,6 +251,16 @@ namespace EFCore.BulkExtensions
         {
             return DbContextBulkTransaction.ExecuteAsync(context, entities, OperationType.Update, bulkConfig, progress, cancellationToken);
         }
+
+        public static Task BulkUpdateAsync<TSource>(this DbContext context, IList<TSource> entities, List<string> updateProp, List<string> keyProp, Action<BulkConfig> bulkAction=null, CancellationToken cancellationToken = default) where TSource : class
+        { 
+            BulkConfig bulkConfig = new BulkConfig();
+            bulkConfig.UpdateByProperties = keyProp;
+            bulkConfig.PropertiesToInclude = updateProp;
+            bulkAction?.Invoke(bulkConfig);
+            return DbContextBulkTransaction.ExecuteAsync(context, entities, OperationType.Update, bulkConfig, null, cancellationToken);
+        }
+       
 
         public static Task BulkUpdateAsync(this DbContext context, Type entityType, IList<object> entities, BulkConfig bulkConfig = null, Action<decimal> progress = null, CancellationToken cancellationToken = default)
         {

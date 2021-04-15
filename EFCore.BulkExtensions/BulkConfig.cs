@@ -33,7 +33,8 @@ namespace EFCore.BulkExtensions
 
         public List<string> PropertiesToExclude { get; set; }
 
-        public List<string> UpdateByProperties { get; set; }
+        public List<string> UpdateByProperties { get; set; } 
+         
 
         // since Microsoft.Data.SqlClient.SqlBulkCopyOptions is a superset of 
         // System.Data.SqlClient.SqlBulkCopyOptions, allow user to always specify

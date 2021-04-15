@@ -61,6 +61,7 @@ namespace EFCore.BulkExtensions.Tests
 
             using (var context = new TestContext(ContextUtil.GetOptions()))
             {
+                var entities = new List<Item>(); 
                 var sqlHelper = context.GetService<ISqlGenerationHelper>();
                 context.Database.OpenConnection();
 
