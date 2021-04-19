@@ -19,7 +19,7 @@ namespace EFCore.BulkExtensions.SQLAdapters.Oracle
         {
             var connection = OpenAndGetSqlConnection(context, tableInfo.BulkConfig);
             bool doExplicitCommit = false;
-            bool doPreInsert = entities.Count()>tableInfo.BulkConfig.BatchSize;
+            bool doPreInsert = entities.Count() > tableInfo.BulkConfig.BatchSize;
             IList<T> preInsertEntities = null;
             if (doPreInsert)
             {
@@ -27,26 +27,28 @@ namespace EFCore.BulkExtensions.SQLAdapters.Oracle
                 entities = entities.Skip(tableInfo.BulkConfig.BatchSize).ToList();
             }
             try
-            { 
+            {
                 if (context.Database.CurrentTransaction == null)
-                {  
+                {
                     doExplicitCommit = true;
                 }
                 var transaction = context.Database.CurrentTransaction == null ?
                     connection.BeginTransaction() :
                     context.Database.CurrentTransaction.GetUnderlyingTransaction(tableInfo.BulkConfig);
 
-                var command = GetOracleCommand(context, type, entities, tableInfo, (OracleConnection)connection, (OracleTransaction)transaction);
-                if(doPreInsert)
+                using (var command = GetOracleCommand(context, type, entities, tableInfo, (OracleConnection)connection, (OracleTransaction)transaction))
                 {
-                    LoadOracleValues(tableInfo, preInsertEntities, command);
+                    if (doPreInsert)
+                    {
+                        LoadOracleValues(tableInfo, preInsertEntities, command);
+                        command.ExecuteNonQuery();
+                    }
+                    LoadOracleValues(tableInfo, entities, command);
                     command.ExecuteNonQuery();
-                }
-                LoadOracleValues(tableInfo, entities, command);
-                command.ExecuteNonQuery();
-                if (doExplicitCommit)
-                {
-                    transaction.Commit();
+                    if (doExplicitCommit)
+                    {
+                        transaction.Commit();
+                    }
                 }
             }
             finally
@@ -55,10 +57,10 @@ namespace EFCore.BulkExtensions.SQLAdapters.Oracle
             }
         }
 
-        
+
         public async Task InsertAsync<T>(DbContext context, Type type, IList<T> entities, TableInfo tableInfo, Action<decimal> progress, CancellationToken cancellationToken)
         {
-            var connection =await OpenAndGetSqlConnectionAsync(context, tableInfo.BulkConfig,cancellationToken);
+            var connection = await OpenAndGetSqlConnectionAsync(context, tableInfo.BulkConfig, cancellationToken);
             bool doExplicitCommit = false;
             bool doPreInsert = entities.Count() > tableInfo.BulkConfig.BatchSize;
             IList<T> preInsertEntities = null;
@@ -77,22 +79,24 @@ namespace EFCore.BulkExtensions.SQLAdapters.Oracle
                     connection.BeginTransaction() :
                     context.Database.CurrentTransaction.GetUnderlyingTransaction(tableInfo.BulkConfig);
 
-                var command = GetOracleCommand(context, type, entities, tableInfo, (OracleConnection)connection, (OracleTransaction)transaction);
-                if (doPreInsert)
+                using (var command = GetOracleCommand(context, type, entities, tableInfo, (OracleConnection)connection, (OracleTransaction)transaction))
                 {
-                    LoadOracleValues(tableInfo, preInsertEntities, command);
+                    if (doPreInsert)
+                    {
+                        LoadOracleValues(tableInfo, preInsertEntities, command);
+                        await command.ExecuteNonQueryAsync();
+                    }
+                    LoadOracleValues(tableInfo, entities, command);
                     await command.ExecuteNonQueryAsync();
-                }
-                LoadOracleValues(tableInfo, entities, command);
-                await command.ExecuteNonQueryAsync();
-                if (doExplicitCommit)
-                {
-                    transaction.Commit();
+                    if (doExplicitCommit)
+                    {
+                        transaction.Commit();
+                    }
                 }
             }
             finally
             {
-               await context.Database.CloseConnectionAsync();
+                await context.Database.CloseConnectionAsync();
             }
         }
 
@@ -115,12 +119,14 @@ namespace EFCore.BulkExtensions.SQLAdapters.Oracle
                     connection.BeginTransaction() :
                     context.Database.CurrentTransaction.GetUnderlyingTransaction(tableInfo.BulkConfig);
 
-                var command = GetOracleCommand(context, type, entities, tableInfo, (OracleConnection)connection, (OracleTransaction)transaction); 
-                LoadOracleValues(tableInfo, entities, command);
-                await command.ExecuteNonQueryAsync();
-                if (doExplicitCommit)
+                using (var command = GetOracleCommand(context, type, entities, tableInfo, (OracleConnection)connection, (OracleTransaction)transaction))
                 {
-                    transaction.Commit();
+                    LoadOracleValues(tableInfo, entities, command);
+                    await command.ExecuteNonQueryAsync();
+                    if (doExplicitCommit)
+                    {
+                        transaction.Commit();
+                    }
                 }
             }
             finally
@@ -194,7 +200,7 @@ namespace EFCore.BulkExtensions.SQLAdapters.Oracle
         #region OracleData
         internal static OracleCommand GetOracleCommand<T>(DbContext context, Type type, IList<T> entities, TableInfo tableInfo, OracleConnection connection, OracleTransaction transaction)
         {
-            
+
             OracleCommand command = connection.CreateCommand();
             command.Transaction = transaction;
 
@@ -216,10 +222,10 @@ namespace EFCore.BulkExtensions.SQLAdapters.Oracle
                     command.CommandText = SqlQueryBuilderOracle.DeleteFromTable(tableInfo);
                     break;
             }
-            type = tableInfo.HasAbstractList ? entities[0].GetType() : type; 
+            type = tableInfo.HasAbstractList ? entities[0].GetType() : type;
             var entityType = context.Model.FindEntityType(type);
             var entityPropertiesDict = entityType.GetProperties().Where(a => tableInfo.PropertyColumnNamesDict.ContainsKey(a.Name)).ToDictionary(a => a.Name, a => a);
-            var properties = type.GetProperties(); 
+            var properties = type.GetProperties();
             foreach (var property in properties)
             {
                 if (entityPropertiesDict.ContainsKey(property.Name))
@@ -227,14 +233,14 @@ namespace EFCore.BulkExtensions.SQLAdapters.Oracle
                     var propertyEntityType = entityPropertiesDict[property.Name];
                     string columnName = propertyEntityType.GetColumnName();
                     bool isNullable = true;
-                    var propertyType = Nullable.GetUnderlyingType(property.PropertyType); 
-                    if(propertyType==null)
+                    var propertyType = Nullable.GetUnderlyingType(property.PropertyType);
+                    if (propertyType == null)
                     {
-                        propertyType= property.PropertyType;
+                        propertyType = property.PropertyType;
                         isNullable = false;
-                    } 
+                    }
                     //TODO 不是值类型是否只有string?
-                    object val=propertyType.IsValueType? Activator.CreateInstance(propertyType): string.Empty; 
+                    object val = propertyType.IsValueType ? Activator.CreateInstance(propertyType) : string.Empty;
                     var parameter = new OracleParameter($":{columnName}", val);
                     parameter.IsNullable = isNullable;
                     command.Parameters.Add(parameter);
@@ -269,8 +275,8 @@ namespace EFCore.BulkExtensions.SQLAdapters.Oracle
             }
             command.ArrayBindCount = entities.Count();
             command.BindByName = true;
-            
-            command.CommandTimeout = tableInfo.BulkConfig.BulkCopyTimeout??300;
+
+            command.CommandTimeout = tableInfo.BulkConfig.BulkCopyTimeout ?? 300;
         }
         #endregion
     }
