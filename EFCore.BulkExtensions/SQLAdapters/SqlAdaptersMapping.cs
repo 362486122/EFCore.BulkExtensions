@@ -16,7 +16,8 @@ namespace EFCore.BulkExtensions.SqlAdapters
         //PostgreSql, // ProviderName can be added as  optional Attribute of Enum so it can be defined when not the same, like Npgsql for PostgreSql
         //MySql,
         Oracle,
-        PostgreSQL
+        PostgreSQL,
+        Kdbndp //金仓
     }
 
     public static class SqlAdaptersMapping
@@ -27,7 +28,8 @@ namespace EFCore.BulkExtensions.SqlAdapters
                 {DbServer.Sqlite, new SqLiteOperationsAdapter()},
                 {DbServer.SqlServer, new SqlOperationsServerAdapter()},
                 {DbServer.Oracle,new OracleOperationsAdapter()},
-                {DbServer.PostgreSQL,new PostgresqlAdapter() }
+                {DbServer.PostgreSQL,new PostgresqlAdapter() },
+                {DbServer.Kdbndp,new KdbndpAdapter() }
             };
 
         public static readonly Dictionary<DbServer, IQueryBuilderSpecialization> SqlQueryBuilderSpecializationMapping =
@@ -36,7 +38,8 @@ namespace EFCore.BulkExtensions.SqlAdapters
                 {DbServer.Sqlite, new SqLiteDialect()},
                 {DbServer.SqlServer, new SqlServerDialect()},
                 {DbServer.Oracle,new OracleDialect() },
-                {DbServer.PostgreSQL,new PostgresqlDialect() }
+                {DbServer.PostgreSQL,new PostgresqlDialect() },
+                {DbServer.Kdbndp,new KdbndpDialect() }
             };
 
         public static ISqlOperationsAdapter CreateBulkOperationsAdapter(DbContext context)
@@ -69,6 +72,10 @@ namespace EFCore.BulkExtensions.SqlAdapters
             else if(context.Database.ProviderName.Contains(DbServer.PostgreSQL.ToString()))
             {
                 return DbServer.PostgreSQL;
+            }
+            else if(context.Database.ProviderName.Contains("Kingbase"))
+            { 
+                return DbServer.Kdbndp;
             }
             return DbServer.SqlServer;
         }

@@ -57,7 +57,7 @@ namespace EFCore.BulkExtensions
             {
                 sqlSET = sqlSET.Replace("[", "\"").Replace("]", "\"").Replace("@", ":");
             }
-            if(SqlAdaptersMapping.GetDatabaseType(context)==DbServer.PostgreSQL)
+            if(SqlAdaptersMapping.GetDatabaseType(context)==DbServer.PostgreSQL|| SqlAdaptersMapping.GetDatabaseType(context)==DbServer.Kdbndp)
             {
                 sqlSET = sqlSET.Replace("[", "\"").Replace("]", "\"");
             }
@@ -115,10 +115,10 @@ namespace EFCore.BulkExtensions
             {
                 return sqlColumn.Replace("[", "\"").Replace("]", "\"").Replace("@", ":");
             }
-            if(dbServer == DbServer.PostgreSQL)
+            if(dbServer == DbServer.PostgreSQL|| dbServer == DbServer.Kdbndp)
             {
                 return sqlColumn.Replace("[", "\"").Replace("]", "\"");
-            }
+            }  
             return sqlColumn;
         }
 
