@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using EFCore.BulkExtensions.SQLAdapters;
+using EFCore.BulkExtensions.SQLAdapters.MySql;
 using EFCore.BulkExtensions.SQLAdapters.Oracle;
 using EFCore.BulkExtensions.SQLAdapters.Postgresql;
 using EFCore.BulkExtensions.SQLAdapters.SQLite;
@@ -12,12 +14,11 @@ namespace EFCore.BulkExtensions.SqlAdapters
     public enum DbServer
     {
         SqlServer,
-        Sqlite,
-        //PostgreSql, // ProviderName can be added as  optional Attribute of Enum so it can be defined when not the same, like Npgsql for PostgreSql
-        //MySql,
+        Sqlite, 
         Oracle,
         PostgreSQL,
-        Kdbndp //金仓
+        Kdbndp, //金仓
+        MySql,
     }
 
     public static class SqlAdaptersMapping
@@ -29,7 +30,8 @@ namespace EFCore.BulkExtensions.SqlAdapters
                 {DbServer.SqlServer, new SqlOperationsServerAdapter()},
                 {DbServer.Oracle,new OracleOperationsAdapter()},
                 {DbServer.PostgreSQL,new PostgresqlAdapter() },
-                {DbServer.Kdbndp,new KdbndpAdapter() }
+                {DbServer.Kdbndp,new KdbndpAdapter() },
+                {DbServer.MySql,new MySqlAdapter() }
             };
 
         public static readonly Dictionary<DbServer, IQueryBuilderSpecialization> SqlQueryBuilderSpecializationMapping =
@@ -39,7 +41,8 @@ namespace EFCore.BulkExtensions.SqlAdapters
                 {DbServer.SqlServer, new SqlServerDialect()},
                 {DbServer.Oracle,new OracleDialect() },
                 {DbServer.PostgreSQL,new PostgresqlDialect() },
-                {DbServer.Kdbndp,new KdbndpDialect() }
+                {DbServer.Kdbndp,new KdbndpDialect() },
+                {DbServer.MySql,new MySqlDialect() }
             };
 
         public static ISqlOperationsAdapter CreateBulkOperationsAdapter(DbContext context)
@@ -69,15 +72,23 @@ namespace EFCore.BulkExtensions.SqlAdapters
             {
                 return DbServer.Oracle;
             }
-            else if(context.Database.ProviderName.Contains(DbServer.PostgreSQL.ToString()))
+            else if (context.Database.ProviderName.Contains(DbServer.PostgreSQL.ToString()))
             {
                 return DbServer.PostgreSQL;
             }
-            else if(context.Database.ProviderName.Contains("Kingbase"))
-            { 
+            else if (context.Database.ProviderName.Contains("Kingbase"))
+            {
                 return DbServer.Kdbndp;
             }
-            return DbServer.SqlServer;
+            else if (context.Database.ProviderName.Contains("SqlServer"))
+            {
+                return DbServer.SqlServer;
+            }
+            else if(context.Database.ProviderName.Contains("MySql"))
+            {
+                return DbServer.MySql;
+            }
+            throw new NotSupportedException($"Not Support DbContext Provider:{context.Database.ProviderName}");
         }
     }
 }

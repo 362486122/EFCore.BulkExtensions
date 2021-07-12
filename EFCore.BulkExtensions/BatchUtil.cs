@@ -32,6 +32,8 @@ namespace EFCore.BulkExtensions
             innerParameters = ReloadSqlParameters(context, innerParameters.ToList()); // Sqlite requires SqliteParameters
             tableAlias = SqlAdaptersMapping.GetDatabaseType(context) == DbServer.SqlServer ? $"[{tableAlias}]" : tableAlias;
 
+            var sqlQueryBuilder = SqlAdaptersMapping.GetAdapterDialect(context);
+            sql = sqlQueryBuilder.FormatDeleteSql(sql);
             var resultQuery = $"{leadingComments}DELETE {topStatement}{tableAlias}{sql}";
             return (resultQuery, new List<object>(innerParameters));
         }
@@ -60,6 +62,10 @@ namespace EFCore.BulkExtensions
             if(SqlAdaptersMapping.GetDatabaseType(context)==DbServer.PostgreSQL|| SqlAdaptersMapping.GetDatabaseType(context)==DbServer.Kdbndp)
             {
                 sqlSET = sqlSET.Replace("[", "\"").Replace("]", "\"");
+            }
+            if (SqlAdaptersMapping.GetDatabaseType(context) == DbServer.MySql)
+            {
+                sqlSET = sqlSET.Replace("[", "`").Replace("]", "`");
             }
             sqlParameters = ReloadSqlParameters(context, sqlParameters); // Sqlite requires SqliteParameters
 
@@ -118,7 +124,11 @@ namespace EFCore.BulkExtensions
             if(dbServer == DbServer.PostgreSQL|| dbServer == DbServer.Kdbndp)
             {
                 return sqlColumn.Replace("[", "\"").Replace("]", "\"");
-            }  
+            }
+            if(dbServer == DbServer.MySql)
+            {
+                return sqlColumn.Replace("[", "`").Replace("]", "`");
+            }
             return sqlColumn;
         }
 

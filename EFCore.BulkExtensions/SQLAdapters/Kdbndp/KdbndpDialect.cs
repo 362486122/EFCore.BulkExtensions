@@ -9,7 +9,7 @@ using System.Linq.Expressions;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace EFCore.BulkExtensions.SQLAdapters.Postgresql
+namespace EFCore.BulkExtensions.SQLAdapters
 {
     public class KdbndpDialect : IQueryBuilderSpecialization
     {
@@ -46,6 +46,10 @@ namespace EFCore.BulkExtensions.SQLAdapters.Postgresql
             result.TableAliasSuffixAs = match.Groups[2].Value;
             result.Sql = fullQuery.Substring(match.Index + match.Length);
             return result;
+        }
+        public string FormatDeleteSql(string fullQuery)
+        {
+            return fullQuery;
         }
     }
 }

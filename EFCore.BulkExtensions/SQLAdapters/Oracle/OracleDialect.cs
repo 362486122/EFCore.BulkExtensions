@@ -49,5 +49,9 @@ namespace EFCore.BulkExtensions.SQLAdapters.Oracle
             result.Sql = fullQuery.Substring(match.Index + match.Length);
             return result;
         }
+        public string FormatDeleteSql(string fullQuery)
+        {
+            return fullQuery;
+        }
     }
 }

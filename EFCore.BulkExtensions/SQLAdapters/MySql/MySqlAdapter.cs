@@ -1,23 +1,26 @@
 ﻿using EFCore.BulkExtensions.SqlAdapters;
-using Kdbndp;
-using Microsoft.EntityFrameworkCore; 
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using MySql.Data.MySqlClient;
+using MySqlConnector;
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Data.Common;
+using System.Data.SqlClient;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace EFCore.BulkExtensions.SQLAdapters
+namespace EFCore.BulkExtensions.SQLAdapters.MySql
 {
-    public class KdbndpAdapter : ISqlOperationsAdapter
+    public class MySqlAdapter : ISqlOperationsAdapter
     {
 
         public void Insert<T>(DbContext context, Type type, IList<T> entities, TableInfo tableInfo, Action<decimal> progress)
         {
-            var connection = OpenAndGetKdbndpConnection(context, tableInfo.BulkConfig);
+            var connection = OpenAndGetMySqlConnection(context, tableInfo.BulkConfig);
             bool doExplicitCommit = false;
             try
             {
@@ -26,24 +29,15 @@ namespace EFCore.BulkExtensions.SQLAdapters
                     //context.Database.UseTransaction(connection.BeginTransaction());
                     doExplicitCommit = true;
                 }
-                var transaction = (KdbndpTransaction)(context.Database.CurrentTransaction == null ?
+                var transaction = (MySqlTransaction)(context.Database.CurrentTransaction == null ?
                                                       connection.BeginTransaction() :
                                                       context.Database.CurrentTransaction.GetUnderlyingTransaction(tableInfo.BulkConfig));
 
-                var insertCopyString = SqlQueryBuilderPostgresql.GetCopyString(tableInfo);
-                List<string> columnsList = tableInfo.PropertyColumnNamesDict.Values.ToList();
-                var dataTable = GetDataTable(context, type, entities, tableInfo);
-                using (var importer = connection.BeginBinaryImport(insertCopyString))
+
+                using (var stream = GetCsvStream(context, type, entities, tableInfo))
                 {
-                    foreach (DataRow row in dataTable.Rows)
-                    {
-                        importer.StartRow();
-                        foreach (var columnName in columnsList)
-                        {
-                            importer.Write(row[columnName]);
-                        }
-                    }
-                    importer.Complete();
+                    var loader = InitLoader(connection, tableInfo, stream);
+                    loader.Load();
                 }
                 if (doExplicitCommit)
                 {
@@ -68,26 +62,14 @@ namespace EFCore.BulkExtensions.SQLAdapters
                     //context.Database.UseTransaction(connection.BeginTransaction());
                     doExplicitCommit = true;
                 }
-                var transaction = (KdbndpTransaction)(context.Database.CurrentTransaction == null ?
+                var transaction = (MySqlTransaction)(context.Database.CurrentTransaction == null ?
                                                       connection.BeginTransaction() :
                                                       context.Database.CurrentTransaction.GetUnderlyingTransaction(tableInfo.BulkConfig));
 
-                var insertCopyString = SqlQueryBuilderPostgresql.GetCopyString(tableInfo);
-
-                var dataTable = GetDataTable(context, type, entities, tableInfo);
-                List<string> columnsList = tableInfo.PropertyColumnNamesDict.Values.ToList();
-                using (var importer = connection.BeginBinaryImport(insertCopyString))
+                using (var stream = GetCsvStream(context, type, entities, tableInfo))
                 {
-                    foreach (DataRow row in dataTable.Rows)
-                    {
-                        importer.StartRow();
-                        //await importer.StartRowAsync();
-                        foreach (var columnName in columnsList)
-                        {
-                            importer.Write(row[columnName]);
-                        }
-                    }
-                    importer.Complete();
+                    var loader = InitLoader(connection, tableInfo, stream);
+                    await loader.LoadAsync();
                 }
                 if (doExplicitCommit)
                 {
@@ -103,7 +85,7 @@ namespace EFCore.BulkExtensions.SQLAdapters
         public void Merge<T>(DbContext context, Type type, IList<T> entities, TableInfo tableInfo, OperationType operationType,
             Action<decimal> progress) where T : class
         {
-            var connection = OpenAndGetKdbndpConnection(context, tableInfo.BulkConfig);
+            var connection = OpenAndGetMySqlConnection(context, tableInfo.BulkConfig);
             bool doExplicitCommit = false;
 
             try
@@ -113,11 +95,11 @@ namespace EFCore.BulkExtensions.SQLAdapters
                     //context.Database.UseTransaction(connection.BeginTransaction());
                     doExplicitCommit = true;
                 }
-                var transaction = (KdbndpTransaction)(context.Database.CurrentTransaction == null ?
+                var transaction = (MySqlTransaction)(context.Database.CurrentTransaction == null ?
                                                       connection.BeginTransaction() :
                                                       context.Database.CurrentTransaction.GetUnderlyingTransaction(tableInfo.BulkConfig));
 
-                using (var command = GetKdbndpCommand(context, type, entities, tableInfo, connection, transaction))
+                using (var command = GetMySqlCommand(context, type, entities, tableInfo, connection, transaction))
                 {
                     type = tableInfo.HasAbstractList ? entities[0].GetType() : type;
                     int rowsCopied = 0;
@@ -229,11 +211,11 @@ namespace EFCore.BulkExtensions.SQLAdapters
                     //context.Database.UseTransaction(connection.BeginTransaction());
                     doExplicitCommit = true;
                 }
-                var transaction = (KdbndpTransaction)(context.Database.CurrentTransaction == null ?
+                var transaction = (MySqlTransaction)(context.Database.CurrentTransaction == null ?
                                                       connection.BeginTransaction() :
                                                       context.Database.CurrentTransaction.GetUnderlyingTransaction(tableInfo.BulkConfig));
 
-                using (var command = GetKdbndpCommand(context, type, entities, tableInfo, connection, transaction))
+                using (var command = GetMySqlCommand(context, type, entities, tableInfo, connection, transaction))
                 {
 
                     type = tableInfo.HasAbstractList ? entities[0].GetType() : type;
@@ -358,12 +340,41 @@ namespace EFCore.BulkExtensions.SQLAdapters
 
 
 
-        #region PostgresqlData
+        #region MySqlData
 
         internal static DataTable GetDataTable<T>(DbContext context, Type type, IList<T> entities, TableInfo tableInfo)
         {
             DataTable dataTable = InnerGetDataTable(context, ref type, entities, tableInfo);
             return dataTable;
+        }
+
+        internal static Stream GetCsvStream<T>(DbContext context, Type type, IList<T> entities, TableInfo tableInfo)
+        {
+            var dt = GetDataTable<T>(context, type, entities, tableInfo);
+
+            var csv = DataTableToCsv(dt, tableInfo.PropertyColumnNamesDict.Values.ToList());
+            byte[] array = Encoding.UTF8.GetBytes(csv);
+            return new MemoryStream(array);
+        }
+        internal static MySqlBulkLoader InitLoader(MySqlConnection connection, TableInfo tableInfo, Stream stream)
+        {
+            MySqlBulkLoader loader = new MySqlBulkLoader(connection)
+            {
+
+                FieldTerminator = ",",
+                FieldQuotationCharacter = '"',
+                EscapeCharacter = '\\',
+                LineTerminator = "\r\n",
+                SourceStream = stream,
+                Local = true,
+                NumberOfLinesToSkip = 0,
+                TableName = tableInfo.TableName,
+                CharacterSet = "utf8"
+            };
+
+            List<string> columnsList = tableInfo.PropertyColumnNamesDict.Values.ToList();
+            loader.Columns.AddRange(columnsList);
+            return loader;
         }
         /// <summary>
         /// Common logic for two versions of GetDataTable
@@ -539,9 +550,42 @@ namespace EFCore.BulkExtensions.SQLAdapters
 
             return dataTable;
         }
-        internal static KdbndpCommand GetKdbndpCommand<T>(DbContext context, Type type, IList<T> entities, TableInfo tableInfo, KdbndpConnection connection, KdbndpTransaction transaction)
+
+        ///将DataTable转换为标准的CSV  
+        /// </summary>  
+        /// <param name="table">数据表</param>  
+        /// <returns>返回标准的CSV</returns>  
+        private static string DataTableToCsv(DataTable table, List<string> Columns)
         {
-            KdbndpCommand command = connection.CreateCommand();
+            //以半角逗号（即,）作分隔符，列为空也要表达其存在。  
+            //列内容如存在半角逗号（即,）则用半角引号（即""）将该字段值包含起来。  
+            //列内容如存在半角引号（即"）则应替换成半角双引号（""）转义，并用半角引号（即""）将该字段值包含起来。  
+            StringBuilder sb = new StringBuilder();
+            foreach (DataRow row in table.Rows)
+            {
+                for (var i = 0; i < Columns.Count(); i++)
+                {
+                    var colum = table.Columns[Columns[i]];
+                    if (i != 0) sb.Append(",");
+
+                    if (colum.DataType == typeof(string) && row[colum] != DBNull.Value)
+                    {
+                        sb.Append("\"" + row[colum].ToString().Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"");
+                    }
+                    else if (row[colum] == DBNull.Value)
+                    {
+                        sb.Append("\\N");
+                    }
+                    else sb.Append(row[colum].ToString());
+                }
+                sb.AppendLine();
+
+            }
+            return sb.ToString();
+        }
+        internal static MySqlCommand GetMySqlCommand<T>(DbContext context, Type type, IList<T> entities, TableInfo tableInfo, MySqlConnection connection, MySqlTransaction transaction)
+        {
+            MySqlCommand command = connection.CreateCommand();
             command.Transaction = transaction;
 
             var operationType = tableInfo.BulkConfig.OperationType;
@@ -586,7 +630,7 @@ namespace EFCore.BulkExtensions.SQLAdapters
                     if (propertyType.Name == "Guid" )
                         sqliteType = SqliteType.Blob; */
 
-                    var parameter = new KdbndpParameter($"@{columnName}", propertyType); // ,sqliteType // ,null
+                    var parameter = new MySqlParameter($"@{columnName}", propertyType); // ,sqliteType // ,null
                     command.Parameters.Add(parameter);
                 }
             }
@@ -594,7 +638,7 @@ namespace EFCore.BulkExtensions.SQLAdapters
             var shadowProperties = tableInfo.ShadowProperties;
             foreach (var shadowProperty in shadowProperties)
             {
-                var parameter = new KdbndpParameter($"@{shadowProperty}", typeof(string));
+                var parameter = new MySqlParameter($"@{shadowProperty}", typeof(string));
                 command.Parameters.Add(parameter);
             }
 
@@ -602,7 +646,8 @@ namespace EFCore.BulkExtensions.SQLAdapters
             return command;
         }
 
-        internal static void LoadSqliteValues<T>(TableInfo tableInfo, T entity, KdbndpCommand command)
+
+        internal static void LoadSqliteValues<T>(TableInfo tableInfo, T entity, MySqlCommand command)
         {
             var propertyColumnsDict = tableInfo.PropertyColumnNamesDict;
             foreach (var propertyColumn in propertyColumnsDict)
@@ -621,7 +666,7 @@ namespace EFCore.BulkExtensions.SQLAdapters
                         var propertyType = Nullable.GetUnderlyingType(ownedProperty.GetType()) ?? ownedProperty.GetType();
                         if (!command.Parameters.Contains("@" + propertyColumn.Value))
                         {
-                            var parameter = new KdbndpParameter($"@{propertyColumn.Value}", propertyType);
+                            var parameter = new MySqlParameter($"@{propertyColumn.Value}", propertyType);
                             command.Parameters.Add(parameter);
                         }
 
@@ -655,17 +700,17 @@ namespace EFCore.BulkExtensions.SQLAdapters
             }
         }
 
-        internal static async Task<KdbndpConnection> OpenAndGetSqliteConnectionAsync(DbContext context, BulkConfig bulkConfig, CancellationToken cancellationToken)
+        internal static async Task<MySqlConnection> OpenAndGetSqliteConnectionAsync(DbContext context, BulkConfig bulkConfig, CancellationToken cancellationToken)
         {
             await context.Database.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
-            return (KdbndpConnection)context.Database.GetDbConnection();
+            return (MySqlConnection)context.Database.GetDbConnection();
         }
 
-        internal static KdbndpConnection OpenAndGetKdbndpConnection(DbContext context, BulkConfig bulkConfig)
+        internal static MySqlConnection OpenAndGetMySqlConnection(DbContext context, BulkConfig bulkConfig)
         {
             context.Database.OpenConnection();
 
-            return (KdbndpConnection)context.Database.GetDbConnection();
+            return (MySqlConnection)context.Database.GetDbConnection();
         }
         #endregion
     }

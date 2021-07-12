@@ -21,5 +21,6 @@ namespace EFCore.BulkExtensions.SqlAdapters
 
         ExtractedTableAlias GetBatchSqlExtractTableAliasFromQuery(string fullQuery, string tableAlias,
             string tableAliasSuffixAs);
+        string FormatDeleteSql(string fullQuery);
     }
 }

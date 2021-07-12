@@ -61,5 +61,10 @@ namespace EFCore.BulkExtensions.SQLAdapters.SQLite
 
             return method.DeclaringType == typeof(string) && method.Name == nameof(string.Concat);
         }
+
+        public string FormatDeleteSql(string fullQuery)
+        {
+            return fullQuery;
+        }
     }
 }

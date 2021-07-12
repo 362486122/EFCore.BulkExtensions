@@ -52,5 +52,11 @@ namespace EFCore.BulkExtensions.SQLAdapters.SQLServer
                 Sql = fullQuery
             };
         }
+        public string FormatDeleteSql(string fullQuery)
+        {
+            return fullQuery;
+        }
     }
+
+   
 }

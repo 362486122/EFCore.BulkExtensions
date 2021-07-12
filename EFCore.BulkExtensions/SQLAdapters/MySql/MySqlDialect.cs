@@ -1,7 +1,6 @@
 ﻿using EFCore.BulkExtensions.SqlAdapters;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
-using Oracle.ManagedDataAccess.Client;
+using MySql.Data.MySqlClient;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -9,20 +8,20 @@ using System.Linq.Expressions;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace EFCore.BulkExtensions.SQLAdapters.Postgresql
+namespace EFCore.BulkExtensions.SQLAdapters.MySql
 {
-    public class PostgresqlDialect : IQueryBuilderSpecialization
+   public  class MySqlDialect: IQueryBuilderSpecialization
     {
         private static readonly int SelectStatementLength = "SELECT".Length;
 
         public List<object> ReloadSqlParameters(DbContext context, List<object> sqlParameters)
-        { 
+        {
             var sqlParametersReloaded = new List<object>();
             var c = context.Database.GetDbConnection();
             foreach (var parameter in sqlParameters)
             {
-                var sqlParameter = (IDbDataParameter)parameter; 
-                sqlParametersReloaded.Add(new NpgsqlParameter(sqlParameter.ParameterName, sqlParameter.Value));
+                var sqlParameter = (IDbDataParameter)parameter;
+                sqlParametersReloaded.Add(new MySqlParameter(sqlParameter.ParameterName, sqlParameter.Value));
             }
             return sqlParametersReloaded;
         }
@@ -50,7 +49,10 @@ namespace EFCore.BulkExtensions.SQLAdapters.Postgresql
 
         public string FormatDeleteSql(string fullQuery)
         {
-            return fullQuery;
+            var match = Regex.Match(fullQuery, @"FROM ([^\s]+) AS ([^\s]+)");
+            var TableAliasSuffixAs = match.Groups[2].Value;
+            return fullQuery.Replace($"{TableAliasSuffixAs}.","").Replace($"AS {TableAliasSuffixAs}","");
+             
         }
     }
 }
